@@ -108,4 +108,32 @@ workflows:
     jobs:
       - build
       - deploy:
-       
+          filters:
+            branches:
+              only: master
+      - confirm_patch:
+          type: approval
+          filters:
+            branches:
+              only: master
+          requires:
+            - build
+      - confirm_minor:
+          type: approval
+          filters:
+            branches:
+              only: master
+          requires:
+            - build
+      - patch_release:
+          filters:
+            branches:
+              only: master
+          requires:
+            - confirm_patch
+      - minor_release:
+          filters:
+            branches:
+              only: master
+          requires:
+            - confirm_minor
