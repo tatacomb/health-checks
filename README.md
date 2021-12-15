@@ -159,3 +159,161 @@ Set to `true` to lock the aspect ratio based on the initial size.
 Set to a numeric value to lock a specific aspect ratio (such as `16/9`).
 If set to numeric, make sure to set initial height/width to values with correct aspect ratio.
 If omitted, set `false`.
+
+#### `lockAspectRatioExtraWidth?: number;`
+
+The `lockAspectRatioExtraWidth` property enables a resizable component to maintain an aspect ratio plus extra width.
+For instance, a video could be displayed 16:9 with a 50px side bar.
+If omitted, set `0`.
+
+#### `lockAspectRatioExtraHeight?: number;`
+
+The `lockAspectRatioExtraHeight` property enables a resizable component to maintain an aspect ratio plus extra height.
+For instance, a video could be displayed 16:9 with a 50px header bar.
+If omitted, set `0`.
+
+#### `bounds?: ('window' | 'parent' | HTMLElement);`
+
+Specifies resize boundaries.
+
+#### `boundsByDirection?: boolean;`
+
+By default max dimensions based on left and top element position.
+Width grow to right side, height grow to bottom side.
+Set `true` for detect max dimensions by direction.
+For example: enable `boundsByDirection` when resizable component stick on right side of screen and you want resize by left handler;
+
+`false` by default.
+
+#### `handleStyles?: HandleStyles;`
+
+The `handleStyles` property is used to override the style of one or more resize handles.
+Only the axis you specify will have its handle style replaced.
+If you specify a value for `right` it will completely replace the styles for the `right` resize handle,
+but other handle will still use the default styles.
+
+#### `handleClasses?: HandleClassName;`
+
+The `handleClasses` property is used to set the className of one or more resize handles.
+
+#### `handleComponent?: HandleComponent;`
+
+The `handleComponent` property is used to pass a React Component to be rendered as one or more resize handle. For example, this could be used to use an arrow icon as a handle..
+
+#### `handleWrapperStyle?: { [key: string]: string };`
+
+The `handleWrapperStyle` property is used to override the style of resize handles wrapper.
+
+#### `handleWrapperClass?: string;`
+
+The `handleWrapperClass` property is used to override the className of resize handles wrapper.
+
+#### `enable?: ?Enable;`
+
+The `enable` property is used to set the resizable permission of a resizable component.
+
+The permission of `top`, `right`, `bottom`, `left`, `topRight`, `bottomRight`, `bottomLeft`, `topLeft` direction resizing.
+If omitted, all resizer are enabled.
+If you want to permit only right direction resizing, set `{ top:false, right:true, bottom:false, left:false, topRight:false, bottomRight:false, bottomLeft:false, topLeft:false }`.
+
+#### `onResizeStart?: ResizeStartCallBack;`
+
+`ResizeStartCallBack` type is below.
+
+```javascript
+type ResizeStartCallback = (
+  e: SyntheticMouseEvent<HTMLDivElement> | SyntheticTouchEvent<HTMLDivElement>,
+  dir: ResizableDirection,
+  refToElement: HTMLDivElement,
+) => void;
+```
+
+Calls when resizable component resize start.
+
+#### `onResize?: ResizeCallback;`
+
+#### `scale?: number`;
+
+The `scale` property is used in the scenario where the resizable element is a descendent of an element using css scaling (e.g. - `transform: scale(0.5)`).
+
+#### `as?: string | React.ComponentType`;
+
+By default the `Resizable` component will render a `div` as a wrapper. The `as` property is used to change the element used.
+
+### Basic
+
+`ResizeCallback` type is below.
+
+```javascript
+type ResizeCallback = (
+  event: MouseEvent | TouchEvent,
+  direction: ResizableDirection,
+  refToElement: HTMLDivElement,
+  delta: NumberSize,
+) => void;
+```
+
+Calls when resizable component resizing.
+
+#### `onResizeStop?: ResizeCallback;`
+
+`ResizeCallback` type is below.
+
+```javascript
+type ResizeCallback = (
+  event: MouseEvent | TouchEvent,
+  direction: ResizableDirection,
+  refToElement: HTMLDivElement,
+  delta: NumberSize,
+) => void;
+```
+
+Calls when resizable component resize stop.
+
+## Instance API
+
+#### * `updateSize(size: { width: number | string, height: number | string }): void`
+
+Update component size.
+
+`grid`, `snap`, `max/minWidth`, `max/minHeight` props is ignored, when this method called.
+
+- for example
+
+```javascript
+class YourComponent extends Component {
+
+  // ...
+
+  update() {
+    this.resizable.updateSize({ width: 200, height: 300 });
+  }
+
+  render() {
+    return (
+      <Resizable ref={c => { this.resizable = c; }}>
+        example
+      </Resizable>
+    );
+  }
+
+  // ...
+}
+```
+
+## Contribute
+
+If you have a feature request, please add it as an issue or make a pull request.
+
+If you have a bug to report, please reproduce the bug in [CodeSandbox](https://codesandbox.io/s/ll587k677z) to help us easily isolate it.
+
+## Test
+
+``` sh
+npm test
+```
+
+## Related
+
+- [react-rnd](https://github.com/bokuweb/react-rnd)
+- [react-sortable-pane](https://github.com/bokuweb/react-sortable-pane)
