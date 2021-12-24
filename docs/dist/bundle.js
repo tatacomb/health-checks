@@ -22855,3 +22855,1255 @@ function validateExplicitKey(element, parentType) {
 function validateChildKeys(node, parentType) {
   if (typeof node !== 'object') {
     return;
+  }
+  if (Array.isArray(node)) {
+    for (var i = 0; i < node.length; i++) {
+      var child = node[i];
+      if (ReactElement.isValidElement(child)) {
+        validateExplicitKey(child, parentType);
+      }
+    }
+  } else if (ReactElement.isValidElement(node)) {
+    // This element was passed in a valid location.
+    if (node._store) {
+      node._store.validated = true;
+    }
+  } else if (node) {
+    var iteratorFn = getIteratorFn(node);
+    // Entry iterators provide implicit keys.
+    if (iteratorFn) {
+      if (iteratorFn !== node.entries) {
+        var iterator = iteratorFn.call(node);
+        var step;
+        while (!(step = iterator.next()).done) {
+          if (ReactElement.isValidElement(step.value)) {
+            validateExplicitKey(step.value, parentType);
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Given an element, validate that its props follow the propTypes definition,
+ * provided by the type.
+ *
+ * @param {ReactElement} element
+ */
+function validatePropTypes(element) {
+  var componentClass = element.type;
+  if (typeof componentClass !== 'function') {
+    return;
+  }
+  var name = componentClass.displayName || componentClass.name;
+  if (componentClass.propTypes) {
+    checkReactTypeSpec(componentClass.propTypes, element.props, 'prop', name, element, null);
+  }
+  if (typeof componentClass.getDefaultProps === 'function') {
+    process.env.NODE_ENV !== 'production' ? warning(componentClass.getDefaultProps.isReactClassApproved, 'getDefaultProps is only used on classic React.createClass ' + 'definitions. Use a static property named `defaultProps` instead.') : void 0;
+  }
+}
+
+var ReactElementValidator = {
+  createElement: function (type, props, children) {
+    var validType = typeof type === 'string' || typeof type === 'function';
+    // We warn in this case but don't throw. We expect the element creation to
+    // succeed and there will likely be errors in render.
+    if (!validType) {
+      if (typeof type !== 'function' && typeof type !== 'string') {
+        var info = '';
+        if (type === undefined || typeof type === 'object' && type !== null && Object.keys(type).length === 0) {
+          info += ' You likely forgot to export your component from the file ' + "it's defined in.";
+        }
+
+        var sourceInfo = getSourceInfoErrorAddendum(props);
+        if (sourceInfo) {
+          info += sourceInfo;
+        } else {
+          info += getDeclarationErrorAddendum();
+        }
+
+        info += ReactComponentTreeHook.getCurrentStackAddendum();
+
+        var currentSource = props !== null && props !== undefined && props.__source !== undefined ? props.__source : null;
+        ReactComponentTreeHook.pushNonStandardWarningStack(true, currentSource);
+        process.env.NODE_ENV !== 'production' ? warning(false, 'React.createElement: type is invalid -- expected a string (for ' + 'built-in components) or a class/function (for composite ' + 'components) but got: %s.%s', type == null ? type : typeof type, info) : void 0;
+        ReactComponentTreeHook.popNonStandardWarningStack();
+      }
+    }
+
+    var element = ReactElement.createElement.apply(this, arguments);
+
+    // The result can be nullish if a mock or a custom function is used.
+    // TODO: Drop this when these are no longer allowed as the type argument.
+    if (element == null) {
+      return element;
+    }
+
+    // Skip key warning if the type isn't valid since our key validation logic
+    // doesn't expect a non-string/function type and can throw confusing errors.
+    // We don't want exception behavior to differ between dev and prod.
+    // (Rendering will throw with a helpful message and as soon as the type is
+    // fixed, the key warnings will appear.)
+    if (validType) {
+      for (var i = 2; i < arguments.length; i++) {
+        validateChildKeys(arguments[i], type);
+      }
+    }
+
+    validatePropTypes(element);
+
+    return element;
+  },
+
+  createFactory: function (type) {
+    var validatedFactory = ReactElementValidator.createElement.bind(null, type);
+    // Legacy hook TODO: Warn if this is accessed
+    validatedFactory.type = type;
+
+    if (process.env.NODE_ENV !== 'production') {
+      if (canDefineProperty) {
+        Object.defineProperty(validatedFactory, 'type', {
+          enumerable: false,
+          get: function () {
+            lowPriorityWarning(false, 'Factory.type is deprecated. Access the class directly ' + 'before passing it to createFactory.');
+            Object.defineProperty(this, 'type', {
+              value: type
+            });
+            return type;
+          }
+        });
+      }
+    }
+
+    return validatedFactory;
+  },
+
+  cloneElement: function (element, props, children) {
+    var newElement = ReactElement.cloneElement.apply(this, arguments);
+    for (var i = 2; i < arguments.length; i++) {
+      validateChildKeys(arguments[i], newElement.type);
+    }
+    validatePropTypes(newElement);
+    return newElement;
+  }
+};
+
+module.exports = ReactElementValidator;
+}).call(this,require('_process'))
+},{"./ReactComponentTreeHook":168,"./ReactCurrentOwner":169,"./ReactElement":171,"./canDefineProperty":179,"./checkReactTypeSpec":180,"./getIteratorFn":182,"./lowPriorityWarning":184,"_process":29,"fbjs/lib/warning":26}],174:[function(require,module,exports){
+(function (process){
+/**
+ * Copyright 2015-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ *
+ */
+
+'use strict';
+
+var warning = require('fbjs/lib/warning');
+
+function warnNoop(publicInstance, callerName) {
+  if (process.env.NODE_ENV !== 'production') {
+    var constructor = publicInstance.constructor;
+    process.env.NODE_ENV !== 'production' ? warning(false, '%s(...): Can only update a mounted or mounting component. ' + 'This usually means you called %s() on an unmounted component. ' + 'This is a no-op. Please check the code for the %s component.', callerName, callerName, constructor && (constructor.displayName || constructor.name) || 'ReactClass') : void 0;
+  }
+}
+
+/**
+ * This is the abstract API for an update queue.
+ */
+var ReactNoopUpdateQueue = {
+  /**
+   * Checks whether or not this composite component is mounted.
+   * @param {ReactClass} publicInstance The instance we want to test.
+   * @return {boolean} True if mounted, false otherwise.
+   * @protected
+   * @final
+   */
+  isMounted: function (publicInstance) {
+    return false;
+  },
+
+  /**
+   * Enqueue a callback that will be executed after all the pending updates
+   * have processed.
+   *
+   * @param {ReactClass} publicInstance The instance to use as `this` context.
+   * @param {?function} callback Called after state is updated.
+   * @internal
+   */
+  enqueueCallback: function (publicInstance, callback) {},
+
+  /**
+   * Forces an update. This should only be invoked when it is known with
+   * certainty that we are **not** in a DOM transaction.
+   *
+   * You may want to call this when you know that some deeper aspect of the
+   * component's state has changed but `setState` was not called.
+   *
+   * This will not invoke `shouldComponentUpdate`, but it will invoke
+   * `componentWillUpdate` and `componentDidUpdate`.
+   *
+   * @param {ReactClass} publicInstance The instance that should rerender.
+   * @internal
+   */
+  enqueueForceUpdate: function (publicInstance) {
+    warnNoop(publicInstance, 'forceUpdate');
+  },
+
+  /**
+   * Replaces all of the state. Always use this or `setState` to mutate state.
+   * You should treat `this.state` as immutable.
+   *
+   * There is no guarantee that `this.state` will be immediately updated, so
+   * accessing `this.state` after calling this method may return the old value.
+   *
+   * @param {ReactClass} publicInstance The instance that should rerender.
+   * @param {object} completeState Next state.
+   * @internal
+   */
+  enqueueReplaceState: function (publicInstance, completeState) {
+    warnNoop(publicInstance, 'replaceState');
+  },
+
+  /**
+   * Sets a subset of the state. This only exists because _pendingState is
+   * internal. This provides a merging strategy that is not available to deep
+   * properties which is confusing. TODO: Expose pendingState or don't use it
+   * during the merge.
+   *
+   * @param {ReactClass} publicInstance The instance that should rerender.
+   * @param {object} partialState Next partial state to be merged with state.
+   * @internal
+   */
+  enqueueSetState: function (publicInstance, partialState) {
+    warnNoop(publicInstance, 'setState');
+  }
+};
+
+module.exports = ReactNoopUpdateQueue;
+}).call(this,require('_process'))
+},{"_process":29,"fbjs/lib/warning":26}],175:[function(require,module,exports){
+arguments[4][103][0].apply(exports,arguments)
+},{"_process":29,"dup":103}],176:[function(require,module,exports){
+/**
+ * Copyright 2013-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ *
+ */
+
+'use strict';
+
+var _require = require('./ReactElement'),
+    isValidElement = _require.isValidElement;
+
+var factory = require('prop-types/factory');
+
+module.exports = factory(isValidElement);
+},{"./ReactElement":171,"prop-types/factory":31}],177:[function(require,module,exports){
+arguments[4][104][0].apply(exports,arguments)
+},{"dup":104}],178:[function(require,module,exports){
+/**
+ * Copyright 2013-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ *
+ */
+
+'use strict';
+
+module.exports = '15.6.1';
+},{}],179:[function(require,module,exports){
+(function (process){
+/**
+ * Copyright 2013-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ *
+ * 
+ */
+
+'use strict';
+
+var canDefineProperty = false;
+if (process.env.NODE_ENV !== 'production') {
+  try {
+    // $FlowFixMe https://github.com/facebook/flow/issues/285
+    Object.defineProperty({}, 'x', { get: function () {} });
+    canDefineProperty = true;
+  } catch (x) {
+    // IE will fail on defineProperty
+  }
+}
+
+module.exports = canDefineProperty;
+}).call(this,require('_process'))
+},{"_process":29}],180:[function(require,module,exports){
+(function (process){
+/**
+ * Copyright 2013-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ *
+ */
+
+'use strict';
+
+var _prodInvariant = require('./reactProdInvariant');
+
+var ReactPropTypeLocationNames = require('./ReactPropTypeLocationNames');
+var ReactPropTypesSecret = require('./ReactPropTypesSecret');
+
+var invariant = require('fbjs/lib/invariant');
+var warning = require('fbjs/lib/warning');
+
+var ReactComponentTreeHook;
+
+if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'test') {
+  // Temporary hack.
+  // Inline requires don't work well with Jest:
+  // https://github.com/facebook/react/issues/7240
+  // Remove the inline requires when we don't need them anymore:
+  // https://github.com/facebook/react/pull/7178
+  ReactComponentTreeHook = require('./ReactComponentTreeHook');
+}
+
+var loggedTypeFailures = {};
+
+/**
+ * Assert that the values match with the type specs.
+ * Error messages are memorized and will only be shown once.
+ *
+ * @param {object} typeSpecs Map of name to a ReactPropType
+ * @param {object} values Runtime values that need to be type-checked
+ * @param {string} location e.g. "prop", "context", "child context"
+ * @param {string} componentName Name of the component for error messages.
+ * @param {?object} element The React element that is being type-checked
+ * @param {?number} debugID The React component instance that is being type-checked
+ * @private
+ */
+function checkReactTypeSpec(typeSpecs, values, location, componentName, element, debugID) {
+  for (var typeSpecName in typeSpecs) {
+    if (typeSpecs.hasOwnProperty(typeSpecName)) {
+      var error;
+      // Prop type validation may throw. In case they do, we don't want to
+      // fail the render phase where it didn't fail before. So we log it.
+      // After these have been cleaned up, we'll let them throw.
+      try {
+        // This is intentionally an invariant that gets caught. It's the same
+        // behavior as without this statement except with a better message.
+        !(typeof typeSpecs[typeSpecName] === 'function') ? process.env.NODE_ENV !== 'production' ? invariant(false, '%s: %s type `%s` is invalid; it must be a function, usually from React.PropTypes.', componentName || 'React class', ReactPropTypeLocationNames[location], typeSpecName) : _prodInvariant('84', componentName || 'React class', ReactPropTypeLocationNames[location], typeSpecName) : void 0;
+        error = typeSpecs[typeSpecName](values, typeSpecName, componentName, location, null, ReactPropTypesSecret);
+      } catch (ex) {
+        error = ex;
+      }
+      process.env.NODE_ENV !== 'production' ? warning(!error || error instanceof Error, '%s: type specification of %s `%s` is invalid; the type checker ' + 'function must return `null` or an `Error` but returned a %s. ' + 'You may have forgotten to pass an argument to the type checker ' + 'creator (arrayOf, instanceOf, objectOf, oneOf, oneOfType, and ' + 'shape all require an argument).', componentName || 'React class', ReactPropTypeLocationNames[location], typeSpecName, typeof error) : void 0;
+      if (error instanceof Error && !(error.message in loggedTypeFailures)) {
+        // Only monitor this failure once because there tends to be a lot of the
+        // same error.
+        loggedTypeFailures[error.message] = true;
+
+        var componentStackInfo = '';
+
+        if (process.env.NODE_ENV !== 'production') {
+          if (!ReactComponentTreeHook) {
+            ReactComponentTreeHook = require('./ReactComponentTreeHook');
+          }
+          if (debugID !== null) {
+            componentStackInfo = ReactComponentTreeHook.getStackAddendumByID(debugID);
+          } else if (element !== null) {
+            componentStackInfo = ReactComponentTreeHook.getCurrentStackAddendum(element);
+          }
+        }
+
+        process.env.NODE_ENV !== 'production' ? warning(false, 'Failed %s type: %s%s', location, error.message, componentStackInfo) : void 0;
+      }
+    }
+  }
+}
+
+module.exports = checkReactTypeSpec;
+}).call(this,require('_process'))
+},{"./ReactComponentTreeHook":168,"./ReactPropTypeLocationNames":175,"./ReactPropTypesSecret":177,"./reactProdInvariant":186,"_process":29,"fbjs/lib/invariant":19,"fbjs/lib/warning":26}],181:[function(require,module,exports){
+/**
+ * Copyright 2013-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ *
+ */
+
+'use strict';
+
+var _require = require('./ReactBaseClasses'),
+    Component = _require.Component;
+
+var _require2 = require('./ReactElement'),
+    isValidElement = _require2.isValidElement;
+
+var ReactNoopUpdateQueue = require('./ReactNoopUpdateQueue');
+var factory = require('create-react-class/factory');
+
+module.exports = factory(Component, isValidElement, ReactNoopUpdateQueue);
+},{"./ReactBaseClasses":166,"./ReactElement":171,"./ReactNoopUpdateQueue":174,"create-react-class/factory":3}],182:[function(require,module,exports){
+arguments[4][145][0].apply(exports,arguments)
+},{"dup":145}],183:[function(require,module,exports){
+/**
+ * Copyright 2013-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ *
+ * 
+ */
+
+'use strict';
+
+var nextDebugID = 1;
+
+function getNextDebugID() {
+  return nextDebugID++;
+}
+
+module.exports = getNextDebugID;
+},{}],184:[function(require,module,exports){
+(function (process){
+/**
+ * Copyright 2014-2015, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ *
+ */
+
+'use strict';
+
+/**
+ * Forked from fbjs/warning:
+ * https://github.com/facebook/fbjs/blob/e66ba20ad5be433eb54423f2b097d829324d9de6/packages/fbjs/src/__forks__/warning.js
+ *
+ * Only change is we use console.warn instead of console.error,
+ * and do nothing when 'console' is not supported.
+ * This really simplifies the code.
+ * ---
+ * Similar to invariant but only logs a warning if the condition is not met.
+ * This can be used to log issues in development environments in critical
+ * paths. Removing the logging code for production environments will keep the
+ * same logic and follow the same code paths.
+ */
+
+var lowPriorityWarning = function () {};
+
+if (process.env.NODE_ENV !== 'production') {
+  var printWarning = function (format) {
+    for (var _len = arguments.length, args = Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
+      args[_key - 1] = arguments[_key];
+    }
+
+    var argIndex = 0;
+    var message = 'Warning: ' + format.replace(/%s/g, function () {
+      return args[argIndex++];
+    });
+    if (typeof console !== 'undefined') {
+      console.warn(message);
+    }
+    try {
+      // --- Welcome to debugging React ---
+      // This error was thrown as a convenience so that you can use this stack
+      // to find the callsite that caused this warning to fire.
+      throw new Error(message);
+    } catch (x) {}
+  };
+
+  lowPriorityWarning = function (condition, format) {
+    if (format === undefined) {
+      throw new Error('`warning(condition, format, ...args)` requires a warning ' + 'message argument');
+    }
+    if (!condition) {
+      for (var _len2 = arguments.length, args = Array(_len2 > 2 ? _len2 - 2 : 0), _key2 = 2; _key2 < _len2; _key2++) {
+        args[_key2 - 2] = arguments[_key2];
+      }
+
+      printWarning.apply(undefined, [format].concat(args));
+    }
+  };
+}
+
+module.exports = lowPriorityWarning;
+}).call(this,require('_process'))
+},{"_process":29}],185:[function(require,module,exports){
+(function (process){
+/**
+ * Copyright 2013-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ *
+ */
+'use strict';
+
+var _prodInvariant = require('./reactProdInvariant');
+
+var ReactElement = require('./ReactElement');
+
+var invariant = require('fbjs/lib/invariant');
+
+/**
+ * Returns the first child in a collection of children and verifies that there
+ * is only one child in the collection.
+ *
+ * See https://facebook.github.io/react/docs/top-level-api.html#react.children.only
+ *
+ * The current implementation of this function assumes that a single child gets
+ * passed without a wrapper, but the purpose of this helper function is to
+ * abstract away the particular structure of children.
+ *
+ * @param {?object} children Child collection structure.
+ * @return {ReactElement} The first and only `ReactElement` contained in the
+ * structure.
+ */
+function onlyChild(children) {
+  !ReactElement.isValidElement(children) ? process.env.NODE_ENV !== 'production' ? invariant(false, 'React.Children.only expected to receive a single React element child.') : _prodInvariant('143') : void 0;
+  return children;
+}
+
+module.exports = onlyChild;
+}).call(this,require('_process'))
+},{"./ReactElement":171,"./reactProdInvariant":186,"_process":29,"fbjs/lib/invariant":19}],186:[function(require,module,exports){
+arguments[4][153][0].apply(exports,arguments)
+},{"dup":153}],187:[function(require,module,exports){
+(function (process){
+/**
+ * Copyright 2013-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ *
+ */
+
+'use strict';
+
+var _prodInvariant = require('./reactProdInvariant');
+
+var ReactCurrentOwner = require('./ReactCurrentOwner');
+var REACT_ELEMENT_TYPE = require('./ReactElementSymbol');
+
+var getIteratorFn = require('./getIteratorFn');
+var invariant = require('fbjs/lib/invariant');
+var KeyEscapeUtils = require('./KeyEscapeUtils');
+var warning = require('fbjs/lib/warning');
+
+var SEPARATOR = '.';
+var SUBSEPARATOR = ':';
+
+/**
+ * This is inlined from ReactElement since this file is shared between
+ * isomorphic and renderers. We could extract this to a
+ *
+ */
+
+/**
+ * TODO: Test that a single child and an array with one item have the same key
+ * pattern.
+ */
+
+var didWarnAboutMaps = false;
+
+/**
+ * Generate a key string that identifies a component within a set.
+ *
+ * @param {*} component A component that could contain a manual key.
+ * @param {number} index Index that is used if a manual key is not provided.
+ * @return {string}
+ */
+function getComponentKey(component, index) {
+  // Do some typechecking here since we call this blindly. We want to ensure
+  // that we don't block potential future ES APIs.
+  if (component && typeof component === 'object' && component.key != null) {
+    // Explicit key
+    return KeyEscapeUtils.escape(component.key);
+  }
+  // Implicit key determined by the index in the set
+  return index.toString(36);
+}
+
+/**
+ * @param {?*} children Children tree container.
+ * @param {!string} nameSoFar Name of the key path so far.
+ * @param {!function} callback Callback to invoke with each child found.
+ * @param {?*} traverseContext Used to pass information throughout the traversal
+ * process.
+ * @return {!number} The number of children in this subtree.
+ */
+function traverseAllChildrenImpl(children, nameSoFar, callback, traverseContext) {
+  var type = typeof children;
+
+  if (type === 'undefined' || type === 'boolean') {
+    // All of the above are perceived as null.
+    children = null;
+  }
+
+  if (children === null || type === 'string' || type === 'number' ||
+  // The following is inlined from ReactElement. This means we can optimize
+  // some checks. React Fiber also inlines this logic for similar purposes.
+  type === 'object' && children.$$typeof === REACT_ELEMENT_TYPE) {
+    callback(traverseContext, children,
+    // If it's the only child, treat the name as if it was wrapped in an array
+    // so that it's consistent if the number of children grows.
+    nameSoFar === '' ? SEPARATOR + getComponentKey(children, 0) : nameSoFar);
+    return 1;
+  }
+
+  var child;
+  var nextName;
+  var subtreeCount = 0; // Count of children found in the current subtree.
+  var nextNamePrefix = nameSoFar === '' ? SEPARATOR : nameSoFar + SUBSEPARATOR;
+
+  if (Array.isArray(children)) {
+    for (var i = 0; i < children.length; i++) {
+      child = children[i];
+      nextName = nextNamePrefix + getComponentKey(child, i);
+      subtreeCount += traverseAllChildrenImpl(child, nextName, callback, traverseContext);
+    }
+  } else {
+    var iteratorFn = getIteratorFn(children);
+    if (iteratorFn) {
+      var iterator = iteratorFn.call(children);
+      var step;
+      if (iteratorFn !== children.entries) {
+        var ii = 0;
+        while (!(step = iterator.next()).done) {
+          child = step.value;
+          nextName = nextNamePrefix + getComponentKey(child, ii++);
+          subtreeCount += traverseAllChildrenImpl(child, nextName, callback, traverseContext);
+        }
+      } else {
+        if (process.env.NODE_ENV !== 'production') {
+          var mapsAsChildrenAddendum = '';
+          if (ReactCurrentOwner.current) {
+            var mapsAsChildrenOwnerName = ReactCurrentOwner.current.getName();
+            if (mapsAsChildrenOwnerName) {
+              mapsAsChildrenAddendum = ' Check the render method of `' + mapsAsChildrenOwnerName + '`.';
+            }
+          }
+          process.env.NODE_ENV !== 'production' ? warning(didWarnAboutMaps, 'Using Maps as children is not yet fully supported. It is an ' + 'experimental feature that might be removed. Convert it to a ' + 'sequence / iterable of keyed ReactElements instead.%s', mapsAsChildrenAddendum) : void 0;
+          didWarnAboutMaps = true;
+        }
+        // Iterator will provide entry [k,v] tuples rather than values.
+        while (!(step = iterator.next()).done) {
+          var entry = step.value;
+          if (entry) {
+            child = entry[1];
+            nextName = nextNamePrefix + KeyEscapeUtils.escape(entry[0]) + SUBSEPARATOR + getComponentKey(child, 0);
+            subtreeCount += traverseAllChildrenImpl(child, nextName, callback, traverseContext);
+          }
+        }
+      }
+    } else if (type === 'object') {
+      var addendum = '';
+      if (process.env.NODE_ENV !== 'production') {
+        addendum = ' If you meant to render a collection of children, use an array ' + 'instead or wrap the object using createFragment(object) from the ' + 'React add-ons.';
+        if (children._isReactElement) {
+          addendum = " It looks like you're using an element created by a different " + 'version of React. Make sure to use only one copy of React.';
+        }
+        if (ReactCurrentOwner.current) {
+          var name = ReactCurrentOwner.current.getName();
+          if (name) {
+            addendum += ' Check the render method of `' + name + '`.';
+          }
+        }
+      }
+      var childrenString = String(children);
+      !false ? process.env.NODE_ENV !== 'production' ? invariant(false, 'Objects are not valid as a React child (found: %s).%s', childrenString === '[object Object]' ? 'object with keys {' + Object.keys(children).join(', ') + '}' : childrenString, addendum) : _prodInvariant('31', childrenString === '[object Object]' ? 'object with keys {' + Object.keys(children).join(', ') + '}' : childrenString, addendum) : void 0;
+    }
+  }
+
+  return subtreeCount;
+}
+
+/**
+ * Traverses children that are typically specified as `props.children`, but
+ * might also be specified through attributes:
+ *
+ * - `traverseAllChildren(this.props.children, ...)`
+ * - `traverseAllChildren(this.props.leftPanelChildren, ...)`
+ *
+ * The `traverseContext` is an optional argument that is passed through the
+ * entire traversal. It can be used to store accumulations or anything else that
+ * the callback might find relevant.
+ *
+ * @param {?*} children Children tree object.
+ * @param {!function} callback To invoke upon traversing each child.
+ * @param {?*} traverseContext Context for traversal.
+ * @return {!number} The number of children in this subtree.
+ */
+function traverseAllChildren(children, callback, traverseContext) {
+  if (children == null) {
+    return 0;
+  }
+
+  return traverseAllChildrenImpl(children, '', callback, traverseContext);
+}
+
+module.exports = traverseAllChildren;
+}).call(this,require('_process'))
+},{"./KeyEscapeUtils":163,"./ReactCurrentOwner":169,"./ReactElementSymbol":172,"./getIteratorFn":182,"./reactProdInvariant":186,"_process":29,"fbjs/lib/invariant":19,"fbjs/lib/warning":26}],188:[function(require,module,exports){
+'use strict';
+
+module.exports = require('./lib/React');
+
+},{"./lib/React":165}],189:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _react = require('react');
+
+var _react2 = _interopRequireDefault(_react);
+
+var _lodash = require('lodash.isequal');
+
+var _lodash2 = _interopRequireDefault(_lodash);
+
+var _resizer = require('./resizer');
+
+var _resizer2 = _interopRequireDefault(_resizer);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+/* eslint-disable import/no-extraneous-dependencies */
+/* eslint-disable react/no-unused-prop-types */
+/* eslint-disable react/require-default-props */
+/* eslint-disable react/jsx-filename-extension */
+/* eslint-disable react/sort-comp */
+/* eslint-disable jsx-a11y/no-static-element-interactions */
+/* eslint-disable max-len */
+/* eslint-disable no-bitwise */
+/* eslint-disable react/no-did-mount-set-state */
+
+var userSelectNone = {
+  userSelect: 'none',
+  MozUserSelect: 'none',
+  WebkitUserSelect: 'none',
+  MsUserSelect: 'none'
+};
+
+var userSelectAuto = {
+  userSelect: 'auto',
+  MozUserSelect: 'auto',
+  WebkitUserSelect: 'auto',
+  MsUserSelect: 'auto'
+};
+
+var clamp = function clamp(n, min, max) {
+  return Math.max(Math.min(n, max), min);
+};
+var snap = function snap(n, size) {
+  return Math.round(n / size) * size;
+};
+
+var Resizable = function (_Component) {
+  _inherits(Resizable, _Component);
+
+  function Resizable(props) {
+    _classCallCheck(this, Resizable);
+
+    var _this = _possibleConstructorReturn(this, (Resizable.__proto__ || Object.getPrototypeOf(Resizable)).call(this, props));
+
+    var width = props.width,
+        height = props.height;
+
+    _this.state = {
+      isResizing: false,
+      width: typeof width === 'undefined' ? 'auto' : width,
+      height: typeof height === 'undefined' ? 'auto' : height,
+      direction: 'right',
+      original: {
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0
+      }
+    };
+    _this.onResizeStart = _this.onResizeStart.bind(_this);
+    _this.onMouseMove = _this.onMouseMove.bind(_this);
+    _this.onMouseUp = _this.onMouseUp.bind(_this);
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('mouseup', _this.onMouseUp);
+      window.addEventListener('mousemove', _this.onMouseMove);
+      window.addEventListener('touchmove', _this.onMouseMove);
+      window.addEventListener('touchend', _this.onMouseUp);
+    }
+    return _this;
+  }
+
+  _createClass(Resizable, [{
+    key: 'componentDidMount',
+    value: function componentDidMount() {
+      var size = this.size;
+      // If props.width or height is not defined, set default size when mounted.
+      this.setState({
+        width: this.state.width || size.width,
+        height: this.state.height || size.height
+      });
+    }
+  }, {
+    key: 'componentWillReceiveProps',
+    value: function componentWillReceiveProps(_ref) {
+      var width = _ref.width,
+          height = _ref.height;
+
+      if (width !== this.props.width) {
+        this.setState({ width: width });
+      }
+      if (height !== this.props.height) {
+        this.setState({ height: height });
+      }
+    }
+  }, {
+    key: 'shouldComponentUpdate',
+    value: function shouldComponentUpdate(nextProps, nextState) {
+      return !(0, _lodash2.default)(this.props, nextProps) || !(0, _lodash2.default)(this.state, nextState);
+    }
+  }, {
+    key: 'componentWillUnmount',
+    value: function componentWillUnmount() {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('mouseup', this.onMouseUp);
+        window.removeEventListener('mousemove', this.onMouseMove);
+        window.removeEventListener('touchmove', this.onMouseMove);
+        window.removeEventListener('touchend', this.onMouseUp);
+      }
+    }
+  }, {
+    key: 'onResizeStart',
+    value: function onResizeStart(event, direction) {
+      var clientX = 0;
+      var clientY = 0;
+      if (event.nativeEvent instanceof MouseEvent) {
+        clientX = event.nativeEvent.clientX;
+        clientY = event.nativeEvent.clientY;
+      } else if (event.nativeEvent instanceof TouchEvent) {
+        clientX = event.nativeEvent.touches[0].clientX;
+        clientY = event.nativeEvent.touches[0].clientY;
+      }
+      if (this.props.onResizeStart) {
+        this.props.onResizeStart(event, direction, this.resizable);
+      }
+      var size = this.size;
+      this.setState({
+        original: {
+          x: clientX,
+          y: clientY,
+          width: size.width,
+          height: size.height
+        },
+        isResizing: true,
+        direction: direction
+      });
+    }
+  }, {
+    key: 'onMouseMove',
+    value: function onMouseMove(event) {
+      if (!this.state.isResizing) return;
+      var clientX = event instanceof MouseEvent ? event.clientX : event.touches[0].clientX;
+      var clientY = event instanceof MouseEvent ? event.clientY : event.touches[0].clientY;
+      var _state = this.state,
+          direction = _state.direction,
+          original = _state.original,
+          width = _state.width,
+          height = _state.height;
+      var _props = this.props,
+          lockAspectRatio = _props.lockAspectRatio,
+          minWidth = _props.minWidth,
+          minHeight = _props.minHeight;
+      var _props2 = this.props,
+          maxWidth = _props2.maxWidth,
+          maxHeight = _props2.maxHeight;
+
+      var ratio = original.height / original.width;
+      var newWidth = original.width;
+      var newHeight = original.height;
+      if (/right/i.test(direction)) {
+        newWidth = original.width + (clientX - original.x);
+        if (lockAspectRatio) newHeight = newWidth * ratio;
+      }
+      if (/left/i.test(direction)) {
+        newWidth = original.width - (clientX - original.x);
+        if (lockAspectRatio) newHeight = newWidth * ratio;
+      }
+      if (/bottom/i.test(direction)) {
+        newHeight = original.height + (clientY - original.y);
+        if (lockAspectRatio) newWidth = newHeight / ratio;
+      }
+      if (/top/i.test(direction)) {
+        newHeight = original.height - (clientY - original.y);
+        if (lockAspectRatio) newWidth = newHeight / ratio;
+      }
+
+      if (this.props.bounds === 'parent') {
+        var parent = this.resizable.parentNode;
+        if (parent instanceof HTMLElement) {
+          var parentRect = parent.getBoundingClientRect();
+          var parentLeft = parentRect.left;
+          var parentTop = parentRect.top;
+
+          var _resizable$getBoundin = this.resizable.getBoundingClientRect(),
+              _left = _resizable$getBoundin.left,
+              _top = _resizable$getBoundin.top;
+
+          var boundWidth = parent.offsetWidth + (parentLeft - _left);
+          var boundHeight = parent.offsetHeight + (parentTop - _top);
+          maxWidth = maxWidth && maxWidth < boundWidth ? maxWidth : boundWidth;
+          maxHeight = maxHeight && maxHeight < boundHeight ? maxHeight : boundHeight;
+        }
+      } else if (this.props.bounds === 'window') {
+        if (typeof window !== 'undefined') {
+          var _resizable$getBoundin2 = this.resizable.getBoundingClientRect(),
+              _left2 = _resizable$getBoundin2.left,
+              _top2 = _resizable$getBoundin2.top;
+
+          var _boundWidth = window.innerWidth - _left2;
+          var _boundHeight = window.innerHeight - _top2;
+          maxWidth = maxWidth && maxWidth < _boundWidth ? maxWidth : _boundWidth;
+          maxHeight = maxHeight && maxHeight < _boundHeight ? maxHeight : _boundHeight;
+        }
+      } else if (this.props.bounds instanceof HTMLElement) {
+        var targetRect = this.props.bounds.getBoundingClientRect();
+        var targetLeft = targetRect.left;
+        var targetTop = targetRect.top;
+
+        var _resizable$getBoundin3 = this.resizable.getBoundingClientRect(),
+            _left3 = _resizable$getBoundin3.left,
+            _top3 = _resizable$getBoundin3.top;
+
+        if (!(this.props.bounds instanceof HTMLElement)) return;
+        var _boundWidth2 = this.props.bounds.offsetWidth + (targetLeft - _left3);
+        var _boundHeight2 = this.props.bounds.offsetHeight + (targetTop - _top3);
+        maxWidth = maxWidth && maxWidth < _boundWidth2 ? maxWidth : _boundWidth2;
+        maxHeight = maxHeight && maxHeight < _boundHeight2 ? maxHeight : _boundHeight2;
+      }
+
+      var computedMinWidth = typeof minWidth === 'undefined' || minWidth < 0 ? 0 : minWidth;
+      var computedMaxWidth = typeof maxWidth === 'undefined' || maxWidth < 0 ? newWidth : maxWidth;
+      var computedMinHeight = typeof minHeight === 'undefined' || minHeight < 0 ? 0 : minHeight;
+      var computedMaxHeight = typeof maxHeight === 'undefined' || maxHeight < 0 ? newHeight : maxHeight;
+
+      if (lockAspectRatio) {
+        var lockedMinWidth = computedMinWidth > computedMinHeight / ratio ? computedMinWidth : computedMinHeight / ratio;
+        var lockedMaxWidth = computedMaxWidth < computedMaxHeight / ratio ? computedMaxWidth : computedMaxHeight / ratio;
+        var lockedMinHeight = computedMinHeight > computedMinWidth * ratio ? computedMinHeight : computedMinWidth * ratio;
+        var lockedMaxHeight = computedMaxHeight < computedMaxWidth * ratio ? computedMaxHeight : computedMaxWidth * ratio;
+        newWidth = clamp(newWidth, lockedMinWidth, lockedMaxWidth);
+        newHeight = clamp(newHeight, lockedMinHeight, lockedMaxHeight);
+      } else {
+        newWidth = clamp(newWidth, computedMinWidth, computedMaxWidth);
+        newHeight = clamp(newHeight, computedMinHeight, computedMaxHeight);
+      }
+      if (this.props.grid) {
+        newWidth = snap(newWidth, this.props.grid[0]);
+      }
+      if (this.props.grid) {
+        newHeight = snap(newHeight, this.props.grid[1]);
+      }
+
+      this.setState({
+        width: width !== 'auto' ? newWidth : 'auto',
+        height: height !== 'auto' ? newHeight : 'auto'
+      });
+      var delta = {
+        width: newWidth - original.width,
+        height: newHeight - original.height
+      };
+      if (this.props.onResize) {
+        this.props.onResize(event, direction, this.resizable, delta);
+      }
+    }
+  }, {
+    key: 'onMouseUp',
+    value: function onMouseUp(event) {
+      var _state2 = this.state,
+          isResizing = _state2.isResizing,
+          direction = _state2.direction,
+          original = _state2.original;
+
+      if (!isResizing) return;
+      var delta = {
+        width: this.size.width - original.width,
+        height: this.size.height - original.height
+      };
+      if (this.props.onResizeStop) {
+        this.props.onResizeStop(event, direction, this.resizable, delta);
+      }
+      this.setState({ isResizing: false });
+    }
+  }, {
+    key: 'setSize',
+    value: function setSize(size) {
+      this.setState({
+        width: this.state.width || size.width,
+        height: this.state.height || size.height
+      });
+    }
+  }, {
+    key: 'updateSize',
+    value: function updateSize(size) {
+      this.setState({ width: size.width, height: size.height });
+    }
+  }, {
+    key: 'renderResizer',
+    value: function renderResizer() {
+      var _this2 = this;
+
+      var _props3 = this.props,
+          enable = _props3.enable,
+          handlerStyles = _props3.handlerStyles,
+          handlerClasses = _props3.handlerClasses;
+
+      if (!enable) return null;
+      var content = Object.keys(enable).map(function (dir) {
+        if (enable[dir] !== false) {
+          return _react2.default.createElement(_resizer2.default, {
+            key: dir,
+            direction: dir,
+            onResizeStart: _this2.onResizeStart,
+            replaceStyles: handlerStyles && handlerStyles[dir],
+            className: handlerClasses && handlerClasses[dir]
+          });
+        }
+        return null;
+      });
+
+      // #93 Wrap the resize box in span (will not break 100% width/height)
+      if (handlerClasses && handlerClasses['wrapper']) {
+        return _react2.default.createElement(
+          'span',
+          { className: handlerClasses && handlerClasses['wrapper'] },
+          content
+        );
+      }
+
+      return content;
+    }
+  }, {
+    key: 'render',
+    value: function render() {
+      var _this3 = this;
+
+      var userSelect = this.state.isResizing ? userSelectNone : userSelectAuto;
+      var _props4 = this.props,
+          style = _props4.style,
+          className = _props4.className;
+
+      return _react2.default.createElement(
+        'div',
+        _extends({
+          ref: function ref(c) {
+            _this3.resizable = c;
+          },
+          style: _extends({
+            position: 'relative'
+          }, userSelect, style, this.style, {
+            boxSizing: 'border-box'
+          }),
+          className: className
+        }, this.props.extendsProps),
+        this.props.children,
+        this.renderResizer()
+      );
+    }
+  }, {
+    key: 'size',
+    get: function get() {
+      var width = 0;
+      var height = 0;
+      if (typeof window !== 'undefined') {
+        var _style = window.getComputedStyle(this.resizable, null);
+        width = ~~_style.getPropertyValue('width').replace('px', '');
+        height = ~~_style.getPropertyValue('height').replace('px', '');
+      }
+      return { width: width, height: height };
+    }
+  }, {
+    key: 'style',
+    get: function get() {
+      var _this4 = this;
+
+      var size = function size(key) {
+        if (typeof _this4.state[key] === 'undefined' || _this4.state[key] === 'auto') return 'auto';else if (/px$/.test(_this4.state[key].toString())) return _this4.state[key].toString();else if (/%$/.test(_this4.state[key].toString())) return _this4.state[key].toString();
+        return _this4.state[key] + 'px';
+      };
+      return {
+        width: size('width'),
+        height: size('height')
+      };
+    }
+  }]);
+
+  return Resizable;
+}(_react.Component);
+
+Resizable.defaultProps = {
+  onResizeStart: function onResizeStart() {},
+  onResize: function onResize() {},
+  onResizeStop: function onResizeStop() {},
+  enable: {
+    top: true,
+    right: true,
+    bottom: true,
+    left: true,
+    topRight: true,
+    bottomRight: true,
+    bottomLeft: true,
+    topLeft: true
+  },
+  style: {},
+  grid: [1, 1],
+  lockAspectRatio: false
+};
+exports.default = Resizable;
+
+},{"./resizer":190,"lodash.isequal":27,"react":188}],190:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+
+/* eslint-disable import/no-extraneous-dependencies */
+/* eslint-disable react/no-unused-prop-types */
+/* eslint-disable react/require-default-props */
+/* eslint-disable react/jsx-filename-extension */
+
+exports.default = ResizeHandler;
+
+var _react = require('react');
+
+var _react2 = _interopRequireDefault(_react);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+var styles = {
+  base: {
+    position: 'absolute'
+  },
+  top: {
+    width: '100%',
+    height: '10px',
+    top: '-5px',
+    left: '0px',
+    cursor: 'row-resize'
+  },
+  right: {
+    width: '10px',
+    height: '100%',
+    top: '0px',
+    right: '-5px',
+    cursor: 'col-resize'
+  },
+  bottom: {
+    width: '100%',
+    height: '10px',
+    bottom: '-5px',
+    left: '0px',
+    cursor: 'row-resize'
+  },
+  left: {
+    width: '10px',
+    height: '100%',
+    top: '0px',
+    left: '-5px',
+    cursor: 'col-resize'
+  },
+  topRight: {
+    width: '20px',
+    height: '20px',
+    position: 'absolute',
+    right: '-10px',
+    top: '-10px',
+    cursor: 'ne-resize'
+  },
+  bottomRight: {
+    width: '20px',
+    height: '20px',
+    position: 'absolute',
+    right: '-10px',
+    bottom: '-10px',
+    cursor: 'se-resize'
+  },
+  bottomLeft: {
+    width: '20px',
+    height: '20px',
+    position: 'absolute',
+    left: '-10px',
+    bottom: '-10px',
+    cursor: 'sw-resize'
+  },
+  topLeft: {
+    width: '20px',
+    height: '20px',
+    position: 'absolute',
+    left: '-10px',
+    top: '-10px',
+    cursor: 'nw-resize'
+  }
+};
+
+function ResizeHandler(props) {
+  return _react2.default.createElement('div', {
+    className: props.className,
+    style: _extends({}, styles.base, styles[props.direction], props.replaceStyles || {}),
+    onMouseDown: function onMouseDown(e) {
+      return props.onResizeStart(e, props.direction);
+    },
+    onTouchStart: function onTouchStart(e) {
+      return props.onResizeStart(e, props.direction);
+    }
+  });
+}
+
+},{"react":188}]},{},[2]);
