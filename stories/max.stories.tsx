@@ -3,27 +3,40 @@ import { Resizable } from '../src';
 import { storiesOf } from '@storybook/react';
 import { style } from './style';
 
-storiesOf('bounds', module)
-  .add('parent', () => (
+storiesOf('max', module)
+  .add('height', () => (
     <Resizable
       style={style}
       defaultSize={{
         width: 200,
         height: 200,
       }}
-      bounds="parent"
+      maxHeight="400px"
     >
       001
     </Resizable>
   ))
-  .add('window', () => (
+  .add('width', () => (
     <Resizable
       style={style}
       defaultSize={{
         width: 200,
         height: 200,
       }}
-      bounds="window"
+      maxWidth="400px"
+    >
+      001
+    </Resizable>
+  ))
+  .add('percentage', () => (
+    <Resizable
+      style={style}
+      defaultSize={{
+        width: 200,
+        height: 200,
+      }}
+      maxWidth="30%"
+      maxHeight="50%"
     >
       001
     </Resizable>
