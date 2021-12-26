@@ -923,3 +923,130 @@ test.serial('should aspect ratio locked with 2:1 ratio when resize to bottom', a
   t.true(onResize.getCall(0).args[0] instanceof MouseEvent);
   t.deepEqual(onResize.getCall(0).args[2].clientWidth, 600);
   t.deepEqual(onResize.getCall(0).args[2].clientHeight, 300);
+  t.deepEqual(onResize.getCall(0).args[3], { width: 400, height: 200 });
+});
+
+test.serial('should aspect ratio locked with 2:1 ratio with extra width/height when resize to bottom', async t => {
+  const onResize = sinon.spy();
+  const onResizeStart = sinon.spy();
+  const onResizeStop = sinon.spy();
+  const resizable = ReactDOM.render<ResizableProps, Resizable>(
+    <Resizable
+      defaultSize={{ width: 250, height: 150 }}
+      onResize={onResize}
+      onResizeStart={onResizeStart}
+      onResizeStop={onResizeStop}
+      lockAspectRatio={2 / 1}
+      lockAspectRatioExtraHeight={50}
+      lockAspectRatioExtraWidth={50}
+    />,
+    document.getElementById('content'),
+  );
+  if (!resizable || resizable instanceof Element) return t.fail();
+  const divs = TestUtils.scryRenderedDOMComponentsWithTag(resizable, 'div') as HTMLDivElement[];
+  const node = ReactDOM.findDOMNode(divs[4]);
+  if (!node || !(node instanceof HTMLDivElement)) return t.fail();
+  TestUtils.Simulate.mouseDown(node, { clientX: 0, clientY: 0 });
+  mouseMove(0, 200);
+  mouseUp(0, 200);
+  t.is(onResizeStop.callCount, 1);
+  t.true(onResize.getCall(0).args[0] instanceof MouseEvent);
+  t.deepEqual(onResize.getCall(0).args[2].clientWidth, 650);
+  t.deepEqual(onResize.getCall(0).args[2].clientHeight, 350);
+  t.deepEqual(onResize.getCall(0).args[3], { width: 400, height: 200 });
+});
+
+test.serial('should clamped by parent width', async t => {
+  const onResize = sinon.spy();
+  const onResizeStart = sinon.spy();
+  const onResizeStop = sinon.spy();
+  const resizable = ReactDOM.render<ResizableProps, Resizable>(
+    <Resizable
+      defaultSize={{ width: 100, height: 100 }}
+      bounds="parent"
+      onResize={onResize}
+      onResizeStart={onResizeStart}
+      onResizeStop={onResizeStop}
+    />,
+    document.getElementById('content'),
+  );
+  if (!resizable || resizable instanceof Element) return t.fail();
+  const divs = TestUtils.scryRenderedDOMComponentsWithTag(resizable, 'div') as HTMLDivElement[];
+  const node = ReactDOM.findDOMNode(divs[7]);
+  if (!node || !(node instanceof HTMLDivElement)) return t.fail();
+  TestUtils.Simulate.mouseDown(node, { clientX: 0, clientY: 0 });
+  mouseMove(200, 0);
+  t.true(onResize.getCall(0).args[0] instanceof MouseEvent);
+  t.deepEqual(onResize.getCall(0).args[2].clientWidth, 200);
+  t.deepEqual(onResize.getCall(0).args[3], { width: 100, height: 0 });
+});
+
+test.serial('should clamped by parent height', async t => {
+  const onResize = sinon.spy();
+  const onResizeStart = sinon.spy();
+  const onResizeStop = sinon.spy();
+  const resizable = ReactDOM.render<ResizableProps, Resizable>(
+    <Resizable
+      defaultSize={{ width: 100, height: 100 }}
+      bounds="parent"
+      onResize={onResize}
+      onResizeStart={onResizeStart}
+      onResizeStop={onResizeStop}
+    />,
+    document.getElementById('content'),
+  );
+  if (!resizable || resizable instanceof Element) return t.fail();
+  const divs = TestUtils.scryRenderedDOMComponentsWithTag(resizable, 'div') as HTMLDivElement[];
+  const node = ReactDOM.findDOMNode(divs[7]);
+  if (!node || !(node instanceof HTMLDivElement)) return t.fail();
+  TestUtils.Simulate.mouseDown(node, { clientX: 0, clientY: 0 });
+  mouseMove(0, 200);
+  t.true(onResize.getCall(0).args[0] instanceof MouseEvent);
+  t.deepEqual(onResize.getCall(0).args[2].clientHeight, 200);
+  t.deepEqual(onResize.getCall(0).args[3], { width: 0, height: 100 });
+});
+
+test.serial('should defaultSize ignored when size set', async t => {
+  const resizable = TestUtils.renderIntoDocument<Element>(
+    <Resizable defaultSize={{ width: 100, height: 100 }} size={{ width: 200, height: 300 }} />,
+  );
+  if (!resizable || resizable instanceof Element) return t.fail();
+  const divs = TestUtils.scryRenderedDOMComponentsWithTag(resizable, 'div') as HTMLDivElement[];
+  t.is(divs.length, 10);
+  t.is(divs[0].style.width, '200px');
+  t.is(divs[0].style.height, '300px');
+  t.is(divs[0].style.position, 'relative');
+});
+
+test.serial('should render a handleComponent for right', async t => {
+  const CustomComponent = <div className={'customHandle-right'} />;
+  const resizable = TestUtils.renderIntoDocument<Element>(<Resizable handleComponent={{ right: CustomComponent }} />);
+  if (!resizable || resizable instanceof Element) return t.fail();
+  const divs = TestUtils.scryRenderedDOMComponentsWithTag(resizable, 'div') as HTMLDivElement[];
+  const node = ReactDOM.findDOMNode(divs[3]);
+  if (!node || !(node instanceof HTMLDivElement)) return t.fail();
+  const handleNode = node.children[0];
+  t.is(node.childElementCount, 1);
+  t.is(handleNode.getAttribute('class'), 'customHandle-right');
+});
+
+test.serial('should adjust resizing for specified scale', async t => {
+  const onResize = sinon.spy();
+  const resizable = ReactDOM.render<ResizableProps, Resizable>(
+    <Resizable defaultSize={{ width: 100, height: 100 }} onResize={onResize} style={{ padding: '40px' }} scale={0.5} />,
+    document.getElementById('content'),
+  );
+  if (!resizable || resizable instanceof Element) return t.fail();
+  const divs = TestUtils.scryRenderedDOMComponentsWithTag(resizable, 'div') as HTMLDivElement[];
+  const node = ReactDOM.findDOMNode(divs[7]);
+  if (!node || !(node instanceof HTMLDivElement)) return t.fail();
+  TestUtils.Simulate.mouseDown(node, { clientX: 0, clientY: 0 });
+  mouseMove(200, 220);
+  TestUtils.Simulate.mouseUp(node);
+  t.is(onResize.callCount, 1);
+  t.true(onResize.getCall(0).args[0] instanceof MouseEvent);
+  t.is(onResize.getCall(0).args[1], 'bottomRight');
+  t.deepEqual(onResize.getCall(0).args[2].clientWidth, 500);
+  t.deepEqual(onResize.getCall(0).args[2].clientHeight, 540);
+  t.deepEqual(onResize.getCall(0).args[3], { width: 400, height: 440 });
+});
