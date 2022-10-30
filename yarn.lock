@@ -10662,4 +10662,78 @@ react-dev-utils@^10.0.0:
     cross-spawn "7.0.1"
     detect-port-alt "1.1.6"
     escape-string-regexp "2.0.0"
-    f
+    filesize "6.0.1"
+    find-up "4.1.0"
+    fork-ts-checker-webpack-plugin "3.1.1"
+    global-modules "2.0.0"
+    globby "8.0.2"
+    gzip-size "5.1.1"
+    immer "1.10.0"
+    inquirer "7.0.4"
+    is-root "2.1.0"
+    loader-utils "1.2.3"
+    open "^7.0.2"
+    pkg-up "3.1.0"
+    react-error-overlay "^6.0.7"
+    recursive-readdir "2.2.2"
+    shell-quote "1.7.2"
+    strip-ansi "6.0.0"
+    text-table "0.2.0"
+
+react-docgen-typescript-loader@^3.7.2:
+  version "3.7.2"
+  resolved "https://registry.yarnpkg.com/react-docgen-typescript-loader/-/react-docgen-typescript-loader-3.7.2.tgz#45cb2305652c0602767242a8700ad1ebd66bbbbd"
+  integrity sha512-fNzUayyUGzSyoOl7E89VaPKJk9dpvdSgyXg81cUkwy0u+NBvkzQG3FC5WBIlXda0k/iaxS+PWi+OC+tUiGxzPA==
+  dependencies:
+    "@webpack-contrib/schema-utils" "^1.0.0-beta.0"
+    loader-utils "^1.2.3"
+    react-docgen-typescript "^1.15.0"
+
+react-docgen-typescript-plugin@^0.5.2:
+  version "0.5.2"
+  resolved "https://registry.yarnpkg.com/react-docgen-typescript-plugin/-/react-docgen-typescript-plugin-0.5.2.tgz#2b294d75ef3145c36303da82be5d447cb67dc0dc"
+  integrity sha512-NQfWyWLmzUnedkiN2nPDb6Nkm68ik6fqbC3UvgjqYSeZsbKijXUA4bmV6aU7qICOXdop9PevPdjEgJuAN0nNVQ==
+  dependencies:
+    debug "^4.1.1"
+    endent "^2.0.1"
+    micromatch "^4.0.2"
+    react-docgen-typescript "^1.20.1"
+    react-docgen-typescript-loader "^3.7.2"
+    tslib "^2.0.0"
+
+react-docgen-typescript@^1.15.0, react-docgen-typescript@^1.20.1:
+  version "1.20.4"
+  resolved "https://registry.yarnpkg.com/react-docgen-typescript/-/react-docgen-typescript-1.20.4.tgz#9a5655986077ccfc58c1a447f92c3d19f7a875bf"
+  integrity sha512-gE2SeseJd6+o981qr9VQJRbvFJ5LjLSKQiwhHsuLN4flt+lheKtG1jp2BPzrv2MKR5gmbLwpmNtK4wbLCPSZAw==
+
+react-docgen@^5.0.0:
+  version "5.1.0"
+  resolved "https://registry.yarnpkg.com/react-docgen/-/react-docgen-5.1.0.tgz#8e69f1d2e9153c535c20162ea1b85878b059b474"
+  integrity sha512-buAVMVqDEtvC7+VRDRlA9udS9cO9jFfb7yxRvKNYR9MXS0MJwaIe7OjSEydNzH9oH7LND3whDE+koFDUBtF3zA==
+  dependencies:
+    "@babel/core" "^7.7.5"
+    "@babel/runtime" "^7.7.6"
+    ast-types "^0.13.2"
+    async "^2.1.4"
+    commander "^2.19.0"
+    doctrine "^3.0.0"
+    node-dir "^0.1.10"
+    strip-indent "^3.0.0"
+
+react-dom@^16.8.3:
+  version "16.9.0"
+  resolved "https://registry.yarnpkg.com/react-dom/-/react-dom-16.9.0.tgz#5e65527a5e26f22ae3701131bcccaee9fb0d3962"
+  integrity sha512-YFT2rxO9hM70ewk9jq0y6sQk8cL02xm4+IzYBz75CQGlClQQ1Bxq0nhHF6OtSbit+AIahujJgb/CPRibFkMNJQ==
+  dependencies:
+    loose-envify "^1.1.0"
+    object-assign "^4.1.1"
+    prop-types "^15.6.2"
+    scheduler "^0.15.0"
+
+react-draggable@^4.0.3:
+  version "4.2.0"
+  resolved "https://registry.yarnpkg.com/react-draggable/-/react-draggable-4.2.0.tgz#40cc5209082ca7d613104bf6daf31372cc0e1114"
+  integrity sha512-5wFq//gEoeTYprnd4ze8GrFc+Rbnx+9RkOMR3vk4EbWxj02U6L6T3yrlKeiw4X5CtjD2ma2+b3WujghcXNRzkw==
+  dependencies:
+    classnames "^2.2.5"
+ 
